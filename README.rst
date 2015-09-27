@@ -47,10 +47,3 @@ Some errors?
 Want to help?
 =============
 `Write code here <https://github.com/nvbn/everpad/wiki/developing-for-everpad>`_
-
-Or create bug reports.
-
-Or donate:
-
-- **PayPal**: nvbn.rm@gmail.com
-- **Yandex Money**: 410011244953574
