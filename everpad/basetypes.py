@@ -1,14 +1,45 @@
+from sqlalchemy.orm.exc import NoResultFound
+
+
 NONE_ID = 0
 NONE_VAL = 0
 
 
+class DbusSendableList(object):
+    """Dbus sendable list"""
+
+    def __init__(self, cls):
+        self._cls = cls
+
+    def __rshift__(self, other):
+        """Shortcut to from_obj and struct"""
+        return [self._cls.from_obj(item).struct for item in other]
+
+    def __lshift__(self, other):
+        """Shortcut to from_tuple"""
+        return [self._cls.from_tuple(item) for item in other]
+
+
 class BaseDbusSendable(type):
     @property
-    def signature(self):
+    def signature(cls):
         return '(' + ''.join(map(
             lambda field: field[1],
-            self.fields,
+            cls.fields,
         )) + ')'
+
+    def __rshift__(cls, other):
+        """Shortcut to from_obj and struct"""
+        return cls.from_obj(other).struct
+
+    def __lshift__(cls, other):
+        """Shortcut to from_tuple"""
+        return cls.from_tuple(other)
+
+    @property
+    def list(cls):
+        """Return shortcut for list mapping"""
+        return DbusSendableList(cls)
 
 
 class DbusSendable(object):
@@ -49,9 +80,17 @@ class DbusSendable(object):
     def give_to_obj(self, obj):
         for field in self.fields:
             val = getattr(self, field[0])
-            if hasattr(obj, field[0] + '_dbus'):
+            try:
+                # check exists, hasattr fails with fresh sqlalchemy
+                # with object has no attribute '_sa_instance_state'
+                try:
+                    getattr(obj, field[0] + '_dbus')
+                except NoResultFound:
+                    # pass when fields is one-to-one relation
+                    pass
+
                 setattr(obj, field[0] + '_dbus', val)
-            else:
+            except AttributeError:
                 setattr(obj, field[0], val)
 
     def __repr__(self):

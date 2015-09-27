@@ -95,7 +95,7 @@ def sanitize(soup=None, html=None):
         'property',
     )
     _protocols = (
-        'http', 'https', 'file',
+        'http', 'https', 'file', 'evernote',
     )
     if not soup:
         soup = BeautifulSoup(html)
@@ -117,7 +117,7 @@ def sanitize(soup=None, html=None):
             tag.hidden = True
     return clean(reduce(
          lambda txt, cur: txt + unicode(cur), soup.contents,
-    u'').replace('\n', ''))
+    u''))
 
 
 def html_unescape(html):

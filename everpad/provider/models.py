@@ -1,37 +1,30 @@
+<<<<<<< HEAD
 from sqlalchemy import (
     Table, Column, Integer, ForeignKey, String, Boolean,
     and_, func,
 )
+=======
+from BeautifulSoup import BeautifulSoup
+from sqlalchemy import Table, Column, Integer, ForeignKey, String, Boolean
+>>>>>>> test
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm.exc import NoResultFound
-from everpad.tools import prepare_file_path
-from BeautifulSoup import BeautifulSoup
+from ..tools import prepare_file_path
+from .. import const
 import binascii
 import os
 import urllib
 import json
 import dbus
+import socket
+
 
 Base = declarative_base()
 
 
-ACTION_NONE = 0
-ACTION_CREATE = 1
-ACTION_DELETE = 2
-ACTION_CHANGE = 3
-ACTION_NOEXSIST = 4
-ACTION_CONFLICT = 5
-ACTION_DUPLICATE = 6
-
-
-SHARE_NONE = 0
-SHARE_NEED_SHARE = 1
-SHARE_SHARED = 2
-SHARE_NEED_STOP = 3
-
-
-notetags_table = Table('notetags', Base.metadata,
+notetags_table = Table(
+    'notetags', Base.metadata,
     Column('note', Integer, ForeignKey('notes.id')),
     Column('tag', Integer, ForeignKey('tags.id'))
 )
@@ -48,7 +41,8 @@ class Note(Base):
     updated_local = Column(Integer)
     notebook_id = Column(Integer, ForeignKey('notebooks.id'))
     notebook = relationship("Notebook", backref='note')
-    tags = relationship("Tag",
+    tags = relationship(
+        "Tag",
         secondary=notetags_table,
         backref="notes",
     )
@@ -64,7 +58,7 @@ class Note(Base):
 
     # sharing data:
     share_date = Column(Integer)
-    share_status = Column(Integer, default=SHARE_NONE)
+    share_status = Column(Integer, default=const.SHARE_NONE)
     share_url = Column(String)
 
     @property
@@ -77,12 +71,19 @@ class Note(Base):
         for tag in val:
             if tag and tag != ' ':  # for blank array and other
                 try:
+<<<<<<< HEAD
                     tags.append(self.session.query(Tag).filter(and_(
                         func.lower(Tag.name) == tag.lower(),
                         Tag.action != ACTION_DELETE,
                     )).one())  # shit shit shit
+=======
+                    tags.append(self.session.query(Tag).filter(
+                        (Tag.name == tag)
+                        & (Tag.action != const.ACTION_DELETE)
+                    ).one())
+>>>>>>> test
                 except NoResultFound:
-                    tg = Tag(name=tag, action=ACTION_CREATE)
+                    tg = Tag(name=tag, action=const.ACTION_CREATE)
                     self.session.add(tg)
                     tags.append(tg)
         self.tags = tags
@@ -157,18 +158,18 @@ class Note(Base):
     def share_url_dbus(self, val):
         pass
 
-    def from_api(self, note,session):
+    def from_api(self, note, session):
         """Fill data from api"""
         soup = BeautifulSoup(note.content.decode('utf8'))
         content = reduce(
             lambda txt, cur: txt + unicode(cur),
-            soup.find('en-note').contents,
-        u'')
+            soup.find('en-note').contents, u'',
+        )
         self.title = note.title.decode('utf8')
         self.content = content
         self.created = note.created
         self.updated = note.updated
-        self.action = ACTION_NONE
+        self.action = const.ACTION_NONE
         if note.notebookGuid:
             self.notebook = session.query(Notebook).filter(
                 Notebook.guid == note.notebookGuid,
@@ -178,19 +179,23 @@ class Note(Base):
                 Tag.guid.in_(note.tagGuids),
             ).all()
         place_name = None
-        if note.attributes.placeName:
-            place_name = note.attributes.placeName.decode('utf8')
-        elif note.attributes.longitude:
-            data = json.loads(urllib.urlopen(
-                'http://maps.googleapis.com/maps/api/geocode/json?latlng=%.4f,%.4f&sensor=false' % (
-                    note.attributes.latitude,
-                    note.attributes.longitude,
-                ),
-            ).read())
-            try:
-                place_name = data['results'][0]['formatted_address']
-            except (IndexError, KeyError):
-                pass
+        if getattr(note, 'attributes'):
+            if note.attributes.placeName:
+                place_name = note.attributes.placeName.decode('utf8')
+            elif note.attributes.longitude:
+                try:
+                    data = json.loads(urllib.urlopen(
+                        'http://maps.googleapis.com/maps/api/geocode/json?latlng=%.4f,%.4f&sensor=false' % (
+                            note.attributes.latitude,
+                            note.attributes.longitude,
+                        ),
+                    ).read())
+                    try:
+                        place_name = data['results'][0]['formatted_address']
+                    except (IndexError, KeyError):
+                        pass
+                except socket.error:
+                    pass
         if place_name:
             self.set_place(place_name, session)
 
@@ -222,8 +227,8 @@ class Notebook(Base):
         self.default = notebook.defaultNotebook
         self.service_created = notebook.serviceCreated
         self.service_updated = notebook.serviceUpdated
-        self.action = ACTION_NONE
-        if(notebook.stack):
+        self.action = const.ACTION_NONE
+        if notebook.stack:
             self.stack = notebook.stack.decode('utf8')
 
     @property
@@ -247,7 +252,7 @@ class Tag(Base):
     def from_api(self, tag):
         """Fill data from api"""
         self.name = tag.name.decode('utf8')
-        self.action = ACTION_NONE
+        self.action = const.ACTION_NONE
 
 
 class Resource(Base):
@@ -268,7 +273,7 @@ class Resource(Base):
         else:
             self.file_name = resource.guid.decode('utf8')
         self.hash = binascii.b2a_hex(resource.data.bodyHash)
-        self.action = ACTION_NONE
+        self.action = const.ACTION_NONE
         self.mime = resource.mime.decode('utf8')
         path = os.path.expanduser('~/.everpad/data/%s/' % self.note_id)
         try:
@@ -284,3 +289,10 @@ class Place(Base):
     __tablename__ = 'places'
     id = Column(Integer, primary_key=True)
     name = Column(String)
+
+
+class Sync(Base):
+    __tablename__ = 'sync'
+    id = Column(Integer, primary_key=True)
+    update_count = Column(Integer)
+    last_sync = Column(Integer)

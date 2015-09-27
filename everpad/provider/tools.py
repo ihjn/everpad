@@ -1,26 +1,16 @@
-import sys
-sys.path.insert(0, '../..')
 from thrift.protocol import TBinaryProtocol
 from thrift.transport import THttpClient
 from evernote.edam.userstore import UserStore
 from evernote.edam.notestore import NoteStore
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from everpad.provider.models import Base
-from everpad.const import HOST, DB_PATH
-from everpad.tools import get_proxy_config
-from everpad.specific import get_keyring
 from urlparse import urlparse
+from .models import Base
+from ..const import HOST, DB_PATH
+from ..tools import get_proxy_config
+from ..specific import get_keyring
 import os
-
-
-ACTION_NONE = 0
-ACTION_CREATE = 1
-ACTION_DELETE = 2
-ACTION_CHANGE = 3
-ACTION_NOEXSIST = 4
-ACTION_CONFLICT = 5
-ACTION_DUPLICATE = 5
+import logging
 
 
 def _nocase_lower(item):
@@ -32,7 +22,10 @@ def set_auth_token(token):
 
 
 def get_auth_token():
-    return get_keyring().get_password('everpad', 'oauth_token')
+    try:
+        return get_keyring().get_password('everpad', 'oauth_token')
+    except Exception as e:
+        logging.exception("Error getting token from keyring")
 
 
 def get_db_session(db_path=None):

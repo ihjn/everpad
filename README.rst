@@ -1,18 +1,15 @@
-everpad package in ubuntu software center pending review - https://myapps.developer.ubuntu.com/dev/apps/1678/
-
-Please vote for these bugs, they greatly hinder development:
-============================================================
-https://bugs.launchpad.net/ubuntu/+source/openssl/+bug/965371
-
-https://bugs.launchpad.net/appmenu-qt/+bug/1057167
-
-
 Everpad
 =======
-
-.. image:: http://ubuntuone.com/4ABojaepuBiaDVv2VsDB7o
+.. image:: https://travis-ci.org/nvbn/django-bower.png
+   :alt: Build Status
+   :target: https://travis-ci.org/nvbn/everpad
+.. image:: https://coveralls.io/repos/nvbn/everpad/badge.png?branch=develop
+   :alt: Coverage Status
+   :target: https://coveralls.io/r/nvbn/everpad
 
 Evernote client well integrated with linux desktop.
+
+.. image:: http://ubuntuone.com/4ABojaepuBiaDVv2VsDB7o
 
 Client has:
  - unity lens
@@ -26,6 +23,8 @@ Client support:
  - resources
  - places
  - en-* tags
+ 
+Security information: The client store notes in a SQLite database and communicates with the Evernote API via Thrift via https.
 
 Installation
 ============
@@ -43,21 +42,8 @@ You can see more about everpad installation, including method for other linux, i
 
 Some errors?
 ============
-For debug output you should run these commands in separate terminals:
-
-``killall everpad everpad-provider everpad-lens && everpad-provider --verbose``
-
-``everpad``
-
-``everpad-lens``
+`Get debug information <https://github.com/nvbn/everpad/wiki/Receiving-debug-information>`_, check your distributive name and version, check your DE version and post bug report.
 
 Want to help?
 =============
 `Write code here <https://github.com/nvbn/everpad/wiki/developing-for-everpad>`_
-
-Or create bug reports.
-
-Or donate:
-
- - **PayPal**: nvbn.rm@gmail.com
- - **Yandex Money**: 410011244953574

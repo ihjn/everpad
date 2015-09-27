@@ -3,7 +3,7 @@ sys.path.insert(0, '../..')
 from PySide.QtCore import Slot, QTranslator, QLocale, Signal, QSettings, QT_TRANSLATE_NOOP, QLibraryInfo
 from PySide.QtGui import QApplication, QSystemTrayIcon, QMenu, QCursor
 from PySide.QtNetwork import QNetworkProxyFactory
-from everpad.basetypes import Note, NONE_ID, NONE_VAL
+from everpad.basetypes import Note, NONE_ID, NONE_VAL, Notebook
 from everpad.tools import get_provider, get_pad, print_version, resource_filename
 from everpad.pad.editor import Editor
 from everpad.pad.management import Management
@@ -23,6 +23,7 @@ import dbus.mainloop.glib
 import argparse
 import fcntl
 import os
+import logging
 import getpass
 
 
@@ -36,15 +37,25 @@ class Indicator(QSystemTrayIcon):
         self.opened_notes = {}
         self.activated.connect(self._activated)
         self.settings = QSettings('everpad', 'everpad-pad')
+        # Configure logger.
+        self.logger = logging.getLogger('everpad-indicator')
+        self.logger.setLevel(logging.DEBUG)
+        fh = logging.FileHandler(
+            os.path.expanduser('~/.everpad/logs/everpad.log'))
+        fh.setLevel(logging.DEBUG)
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        fh.setFormatter(formatter)
+        self.logger.addHandler(fh)
 
     def _activated(self, reason):
         if reason == QSystemTrayIcon.Trigger:
             self.menu.popup(QCursor().pos())
 
-    def _add_note(self, struct):
+    def _add_note(self, menu, struct):
         note = Note.from_tuple(struct)
         title = note.title[:40].replace('&', '&&')
-        self.menu.addAction(title, Slot()(
+        menu.addAction(title, Slot()(
             partial(self.open, note=note)
         ))
 
@@ -77,13 +88,30 @@ class Indicator(QSystemTrayIcon):
                 dbus.Array([], signature='i'), 0,
                 20, Note.ORDER_UPDATED_DESC, 1,
             )
-            notes = self.app.provider.find_notes(
-                '', dbus.Array([], signature='i'),
-                dbus.Array([], signature='i'), 0,
-                20 - len(pin_notes), Note.ORDER_UPDATED_DESC, 0,
-            )
+            sort_by_notebook = bool(int(
+                self.app.provider.get_settings_value('sort-by-notebook') or 0))
+            has_notes = False
+            if not sort_by_notebook:
+                notes = self.app.provider.find_notes(
+                    '', dbus.Array([], signature='i'),
+                    dbus.Array([], signature='i'), 0,
+                    20 - len(pin_notes), Note.ORDER_UPDATED_DESC, 0,
+                )
+                has_notes = bool(notes)
+            else:
+                notebooks = self.app.provider.list_notebooks()
+                notes = {}
+                for notebook_struct in notebooks:
+                    notebook = Notebook.from_tuple(notebook_struct)
+                    _notes = self.app.provider.find_notes('', [notebook.id],
+                         dbus.Array([], signature='i'), 0,
+                         20 - len(pin_notes), Note.ORDER_UPDATED_DESC, 0,
+                    )
+                    notes[notebook] = _notes
+                    if _notes:
+                        has_notes = True
             first_sync = not (
-                len(notes) + len(pin_notes) or self.app.provider.is_first_synced()
+                has_notes or len(pin_notes) or self.app.provider.is_first_synced()
             )
             status_syncing = self.app.provider.get_status() == STATUS_SYNC
             if status_syncing and first_sync:
@@ -104,20 +132,26 @@ class Indicator(QSystemTrayIcon):
                 else:
                     sync_label = self.tr('Last Sync: %s mins ago') % delta_sync
             menu_items = {
-                'create_note'   : [self.tr('Create Note'), self.create],
-                'all_notes'     : [self.tr('All Notes'), self.show_all_notes],
-                'sync'          : [sync_label, Slot()(self.app.provider.sync)],
-                'pin_notes'     : pin_notes,
-                'notes'         : notes,
+                'create_note': [self.tr('Create Note'), self.create],
+                'all_notes': [self.tr('All Notes'), self.show_all_notes],
+                'sync': [sync_label, Slot()(self.app.provider.sync)],
+                'pin_notes': pin_notes,
+                'notes': notes,
             }
             for item in self.app.settings.value('menu-order', DEFAULT_INDICATOR_LAYOUT):
                 if item == 'pin_notes' or item == 'notes':
-                    if not first_sync:
-                        if len(menu_items[item]):
-                            self.menu.addSeparator()
+                    if not first_sync and len(menu_items[item]):
+                        self.menu.addSeparator()
+                        if item == 'notes' and sort_by_notebook:
+                            for notebook in menu_items[item]:
+                                sub_menu = self.menu.addMenu(notebook.name)
+                                _notes = menu_items[item][notebook]
+                                for struct in _notes:
+                                    self._add_note(sub_menu, struct)
+                        else:
                             for struct in menu_items[item]:
-                                self._add_note(struct)
-                            self.menu.addSeparator()
+                                self._add_note(self.menu, struct)
+                        self.menu.addSeparator()
                 else:
                     action = self.menu.addAction(menu_items[item][0], menu_items[item][1])
                     if status_syncing and item == 'sync':
@@ -127,6 +161,7 @@ class Indicator(QSystemTrayIcon):
         self.menu.addAction(self.tr('Exit'), self.exit)
 
     def open(self, note, search_term=''):
+        self.logger.debug('Opening note: "%s".' % note.title)
         old_note_window = self.opened_notes.get(note.id, None)
         if old_note_window and not getattr(old_note_window, 'closed', True):
             editor = self.opened_notes[note.id]
@@ -146,6 +181,7 @@ class Indicator(QSystemTrayIcon):
 
     @Slot()
     def create(self, attach=None, notebook_id=NONE_ID):
+        self.logger.debug('Creating new note.')
         note_struct = Note(  # maybe replace NONE's to somthing better
             id=NONE_ID,
             title=self.tr('New note'),
